@@ -401,13 +401,17 @@ export default function App() {
       try {
         const mandataireData = isM ? myPerson : connectModal;
         const mandantData = isM ? connectModal : myPerson;
-        await fetch("/api/send-email", {
+        console.log("Envoi email mise en relation", { mandataire: mandataireData, mandant: mandantData });
+        const emailRes = await fetch("/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ mandataire: mandataireData, mandant: mandantData }),
         });
+        const emailJson = await emailRes.json();
+        if (!emailRes.ok) console.error("Erreur API email:", emailJson);
+        else console.log("Email envoyé avec succès", emailJson);
       } catch (e) {
-        console.warn("Email non envoyé:", e);
+        console.error("Email non envoyé (exception):", e);
       }
     }
 
