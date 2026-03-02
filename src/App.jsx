@@ -34,20 +34,6 @@ function Modal({ open, onClose, children }) {
   );
 }
 
-function Checkbox({ checked, onChange, label }) {
-  return (
-    <div onClick={onChange} style={{ display: "flex", gap: 10, cursor: "pointer", alignItems: "flex-start", padding: "12px 14px", background: checked ? "#fff7ed" : "#f9fafb", border: `1.5px solid ${checked ? "#fb923c" : "#d1d5db"}`, borderRadius: 10, transition: "all 0.2s", userSelect: "none" }}>
-      <div style={{
-        width: 22, height: 22, borderRadius: 5, border: `2px solid ${checked ? "#ea580c" : "#9ca3af"}`,
-        background: checked ? "#ea580c" : "#fff", display: "flex", alignItems: "center", justifyContent: "center",
-        flexShrink: 0, marginTop: 1, transition: "all 0.2s",
-      }}>
-        {checked && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
-      </div>
-      <span style={{ fontSize: 13, lineHeight: 1.5, color: "#374151", fontWeight: 500 }}>{label}</span>
-    </div>
-  );
-}
 
 function ConnectionStatus({ status }) {
   if (status === "pending") return (
@@ -147,7 +133,7 @@ export default function App() {
   const [formType, setFormType] = useState(null);
   const [connectModal, setConnectModal] = useState(null);
   const [filterTour, setFilterTour] = useState("all");
-  const [form, setForm] = useState({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "", certifie: false });
+  const [form, setForm] = useState({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "" });
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -287,10 +273,6 @@ export default function App() {
       showToast("Veuillez remplir les champs obligatoires.", "#ef4444");
       return;
     }
-    if (!form.certifie) {
-      showToast("Veuillez cocher la certification sur l'honneur.", "#ef4444");
-      return;
-    }
     setSubmitting(true);
     const table = formType === "mandataire" ? "mandataires" : "mandants";
     const { error } = await supabase
@@ -311,7 +293,7 @@ export default function App() {
 
     setSubmitting(false);
     setPendingEmail(form.email);
-    setForm({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "", certifie: false });
+    setForm({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "" });
     setFormType(null);
     setTab("home");
     showToast("Inscription enregistrée ! Vérifiez votre email pour activer votre compte.");
@@ -422,12 +404,6 @@ export default function App() {
       fetchData();
     }
   };
-
-  // ─── Texte certification ───
-
-  const certifLabel = formType === "mandataire"
-    ? "Je certifie sur l'honneur ne pas voter personnellement pour la liste du maire sortant, et m'engage à respecter la consigne de vote du mandant."
-    : "Je certifie sur l'honneur ne pas vouloir voter pour la liste du maire sortant.";
 
   // ─── Rendu ───
 
@@ -655,16 +631,11 @@ export default function App() {
                 />
               </div>
 
-              <div style={{ marginBottom: 24 }}>
-                <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Engagement sur l'honneur *</label>
-                <Checkbox checked={form.certifie} onChange={() => setForm({ ...form, certifie: !form.certifie })} label={certifLabel} />
-              </div>
-
               <button onClick={handleSubmit} disabled={submitting} style={{
                 width: "100%", padding: "14px", borderRadius: 12, border: "none",
-                background: form.certifie ? "linear-gradient(135deg, #ea580c, #c2410c)" : "#d1d5db",
+                background: "linear-gradient(135deg, #ea580c, #c2410c)",
                 color: "#fff", fontSize: 16, fontWeight: 700,
-                cursor: form.certifie && !submitting ? "pointer" : "not-allowed",
+                cursor: submitting ? "not-allowed" : "pointer",
                 opacity: submitting ? 0.7 : 1,
               }}>{submitting ? "Envoi en cours…" : "Valider mon inscription"}</button>
             </div>
