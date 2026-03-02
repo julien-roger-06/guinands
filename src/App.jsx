@@ -453,8 +453,8 @@ export default function App() {
       {/* HEADER */}
       <header style={{
         background: "linear-gradient(135deg, #7c2d12 0%, #c2410c 40%, #ea580c 70%, #f97316 100%)",
-        color: "#fff", padding: "24px 20px 20px", textAlign: "center",
-        borderRadius: "0 0 24px 24px", boxShadow: "0 4px 20px rgba(234,88,12,0.3)",
+        color: "#fff", padding: "10px 16px",
+        boxShadow: "0 4px 20px rgba(234,88,12,0.3)",
         position: "relative", overflow: "hidden",
       }}>
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, opacity: 0.1, pointerEvents: "none" }}>
@@ -463,73 +463,84 @@ export default function App() {
           </svg>
         </div>
 
-        <div style={{ marginBottom: 12 }}>
-          <img src="/lsr_logo.png" alt="Le Seignus Renaissance" style={{ width: 120, height: 120, borderRadius: "50%", objectFit: "cover" }} />
-        </div>
+        <div style={{ maxWidth: 600, margin: "0 auto", display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
+          {/* Logo */}
+          <img src="/lsr_logo.png" alt="Le Seignus Renaissance" style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
 
-        <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-          Allos 04260
-        </div>
-        <h1 style={{ margin: "6px 0 2px", fontSize: 22, fontWeight: 800 }}>Procurations Électorales</h1>
-        <p style={{ margin: 0, opacity: 0.85, fontSize: 14 }}>Élections municipales des 15 et 22 mars 2026</p>
+          {/* Infos */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>Allos 04260</div>
+            <h1 style={{ margin: "2px 0 1px", fontSize: 17, fontWeight: 800, lineHeight: 1.2 }}>Procurations Électorales</h1>
+            <p style={{ margin: "0 0 8px", opacity: 0.85, fontSize: 11 }}>Élections municipales • 15 et 22 mars 2026</p>
 
-        <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-          {[
-            { n: stats.mandataires, l: `Mandataire${stats.mandataires > 1 ? "s" : ""} dispo.`, tab: "mandataires" },
-            { n: stats.mandants, l: `Mandant${stats.mandants > 1 ? "s" : ""} en attente`, tab: "mandants" },
-            { n: stats.connected, l: `Mise${stats.connected > 1 ? "s" : ""} en relation`, tab: null },
-          ].map((s, i) => (
-            <div key={i} onClick={s.tab ? () => setTab(s.tab) : undefined} style={{
-              background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "6px 14px",
-              cursor: s.tab ? "pointer" : "default",
-            }}>
-              <div style={{ fontSize: 20, fontWeight: 800 }}>{s.n}</div>
-              <div style={{ fontSize: 10, opacity: 0.8 }}>{s.l}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+              {[
+                { n: stats.mandataires, l: `Mandataire${stats.mandataires > 1 ? "s" : ""} dispo.`, tab: "mandataires" },
+                { n: stats.mandants, l: `Mandant${stats.mandants > 1 ? "s" : ""} en attente`, tab: "mandants" },
+                { n: stats.connected, l: `Mise${stats.connected > 1 ? "s" : ""} en relation`, tab: null },
+              ].map((s, i) => (
+                <div key={i} onClick={s.tab ? () => setTab(s.tab) : undefined} style={{
+                  background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "4px 10px",
+                  cursor: s.tab ? "pointer" : "default", textAlign: "center",
+                }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, lineHeight: 1 }}>{s.n}</div>
+                  <div style={{ fontSize: 9, opacity: 0.85, whiteSpace: "nowrap" }}>{s.l}</div>
+                </div>
+              ))}
+
+              <div style={{ marginLeft: "auto" }}>
+                {myPerson && (
+                  <span style={{ fontSize: 12, opacity: 0.9, marginRight: 8 }}>
+                    👤 <strong>{myPerson.prenom} {myPerson.nom.charAt(0)}.</strong>
+                  </span>
+                )}
+                {session ? (
+                  <button onClick={handleSignOut} style={{
+                    background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+                    color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11,
+                    cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap",
+                  }}>Se déconnecter</button>
+                ) : (
+                  <button onClick={() => { setAuthModal(true); setAuthStep("input"); setAuthEmail(""); }} style={{
+                    background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+                    color: "#fff", borderRadius: 8, padding: "5px 10px", fontSize: 11,
+                    cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap",
+                  }}>🔑 Se connecter</button>
+                )}
+              </div>
             </div>
-          ))}
-        </div>
-
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          {myPerson && (
-            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "8px 14px" }}>
-              <span style={{ fontSize: 13 }}>👤 <strong>{myPerson.prenom} {myPerson.nom.charAt(0)}.</strong> ({currentUser.type})</span>
-            </div>
-          )}
-          {session ? (
-            <button onClick={handleSignOut} style={{
-              background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
-              color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 12,
-              cursor: "pointer", fontWeight: 600,
-            }}>Se déconnecter</button>
-          ) : (
-            <button onClick={() => { setAuthModal(true); setAuthStep("input"); setAuthEmail(""); }} style={{
-              background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
-              color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 12,
-              cursor: "pointer", fontWeight: 600,
-            }}>🔑 Se connecter</button>
-          )}
+          </div>
         </div>
       </header>
 
-      {/* NAV */}
-      <nav style={{ display: "flex", gap: 4, padding: "16px 16px 0", maxWidth: 600, margin: "0 auto" }}>
+      {/* NAV BASSE */}
+      <nav style={{
+        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+        background: "#fff", borderTop: "1px solid #e5e7eb",
+        boxShadow: "0 -2px 12px rgba(0,0,0,0.08)",
+        display: "flex",
+      }}>
         {[
-          { id: "home", label: "Accueil", icon: "🏠" },
-          { id: "mandataires", label: "Mandataires (présents)", icon: "🙋" },
-          { id: "mandants", label: "Mandants (absents)", icon: "📋" },
+          { id: "home", icon: "🏠", line1: "Accueil", line2: "" },
+          { id: "mandataires", icon: "🗳️", line1: "Mandataires", line2: "(présents)" },
+          { id: "mandants", icon: "📋", line1: "Mandants", line2: "(absents)" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
-            flex: 1, padding: "10px 8px", border: "none", borderRadius: "10px 10px 0 0",
-            background: tab === t.id ? "#fff" : "transparent",
-            color: tab === t.id ? "#c2410c" : "#6b7280",
-            fontWeight: tab === t.id ? 700 : 500, fontSize: 13, cursor: "pointer",
-            boxShadow: tab === t.id ? "0 -2px 10px rgba(0,0,0,0.06)" : "none",
-          }}>{t.icon} {t.label}</button>
+            flex: 1, padding: "10px 8px 14px", border: "none", background: "transparent",
+            color: tab === t.id ? "#c2410c" : "#9ca3af",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+            cursor: "pointer", position: "relative",
+          }}>
+            {tab === t.id && <div style={{ position: "absolute", top: 0, left: "20%", right: "20%", height: 3, background: "#c2410c", borderRadius: "0 0 3px 3px" }} />}
+            <span style={{ fontSize: 22 }}>{t.icon}</span>
+            <span style={{ fontSize: 11, fontWeight: tab === t.id ? 700 : 500, lineHeight: 1.2 }}>{t.line1}</span>
+            {t.line2 && <span style={{ fontSize: 10, lineHeight: 1, opacity: 0.8 }}>{t.line2}</span>}
+          </button>
         ))}
       </nav>
 
-      <main style={{ maxWidth: 600, margin: "0 auto", padding: "0 16px 32px" }}>
-        <div style={{ background: "#fff", borderRadius: "0 0 16px 16px", padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+      <main style={{ maxWidth: 600, margin: "0 auto", padding: "16px 16px 90px" }}>
+        <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
 
           {/* ═══ HOME ═══ */}
           {tab === "home" && (
