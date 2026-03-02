@@ -1,11 +1,12 @@
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
+  host: 'smtp.mail.me.com',
   port: 587,
+  secure: false,
   auth: {
-    user: process.env.SMTP_USER,    // ton email Brevo
-    pass: process.env.SMTP_PASSWORD, // clé SMTP Brevo
+    user: process.env.SMTP_USER,     // julien.roger@me.com
+    pass: process.env.SMTP_PASSWORD, // mot de passe spécifique Apple
   },
 });
 
