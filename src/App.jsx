@@ -433,7 +433,7 @@ export default function App() {
         borderRadius: "0 0 24px 24px", boxShadow: "0 4px 20px rgba(234,88,12,0.3)",
         position: "relative", overflow: "hidden",
       }}>
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, opacity: 0.1 }}>
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, opacity: 0.1, pointerEvents: "none" }}>
           <svg viewBox="0 0 600 40" preserveAspectRatio="none" style={{ width: "100%", height: "100%" }}>
             <polygon points="0,40 50,15 120,30 200,5 280,25 350,10 420,20 500,8 560,22 600,12 600,40" fill="#fff" />
           </svg>
@@ -451,11 +451,14 @@ export default function App() {
 
         <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
           {[
-            { n: stats.mandataires, l: `Mandataire${stats.mandataires > 1 ? "s" : ""} dispo.` },
-            { n: stats.mandants, l: `Mandant${stats.mandants > 1 ? "s" : ""} en attente` },
-            { n: stats.connected, l: `Mise${stats.connected > 1 ? "s" : ""} en relation` },
+            { n: stats.mandataires, l: `Mandataire${stats.mandataires > 1 ? "s" : ""} dispo.`, tab: "mandataires" },
+            { n: stats.mandants, l: `Mandant${stats.mandants > 1 ? "s" : ""} en attente`, tab: "mandants" },
+            { n: stats.connected, l: `Mise${stats.connected > 1 ? "s" : ""} en relation`, tab: null },
           ].map((s, i) => (
-            <div key={i} style={{ background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "6px 14px" }}>
+            <div key={i} onClick={s.tab ? () => setTab(s.tab) : undefined} style={{
+              background: "rgba(255,255,255,0.15)", borderRadius: 10, padding: "6px 14px",
+              cursor: s.tab ? "pointer" : "default",
+            }}>
               <div style={{ fontSize: 20, fontWeight: 800 }}>{s.n}</div>
               <div style={{ fontSize: 10, opacity: 0.8 }}>{s.l}</div>
             </div>
