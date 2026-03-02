@@ -57,7 +57,7 @@ function ConnectionStatus({ status }) {
   return null;
 }
 
-function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, onToggleTermine, currentUserId, hasSession }) {
+function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, onToggleTermine, onCancelConnection, currentUserId, hasSession, myHasConnection }) {
   const isM = type === "mandataire";
   const accent = isM ? "#c2410c" : "#b45309";
   const isMine = person.id === currentUserId;
@@ -97,31 +97,46 @@ function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete
         </div>
       )}
       {connectionStatus && <ConnectionStatus status={connectionStatus} />}
-      {!hasConnection && !isMine && !isTermine && (
+      {!hasConnection && !isMine && !isTermine && !myHasConnection && (
         <button onClick={() => onRequestConnect(person)} style={{
           marginTop: 10, background: "linear-gradient(135deg, #ea580c, #c2410c)",
           color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px",
           fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%",
         }}>🤝 Demander la mise en relation</button>
       )}
+      {!hasConnection && !isMine && !isTermine && myHasConnection && (
+        <p style={{ marginTop: 10, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
+          Annulez votre mise en relation en cours pour en démarrer une nouvelle.
+        </p>
+      )}
       {isMine && hasSession && (
         <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-          <button onClick={() => onEdit(person)} style={{
-            flex: 1, background: "#fff7ed", color: "#c2410c",
-            border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px",
-            fontSize: 13, cursor: "pointer", fontWeight: 600,
-          }}>✏️ Modifier</button>
-          <button onClick={() => onToggleTermine(person, !isTermine)} style={{
-            flex: 1, background: isTermine ? "#fff7ed" : "#f3f4f6",
-            color: isTermine ? "#c2410c" : "#6b7280",
-            border: `1px solid ${isTermine ? "#fed7aa" : "#e5e7eb"}`,
-            borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer", fontWeight: 600,
-          }}>{isTermine ? "🔄 Je cherche à nouveau" : "🔒 Ne plus chercher"}</button>
-          <button onClick={() => onDelete(person.id)} style={{
-            background: "transparent", color: "#9ca3af",
-            border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px",
-            fontSize: 13, cursor: "pointer",
-          }}>Retirer</button>
+          {hasConnection ? (
+            <button onClick={() => onCancelConnection()} style={{
+              flex: 1, background: "#fff", color: "#ef4444",
+              border: "1px solid #fca5a5", borderRadius: 8, padding: "8px 12px",
+              fontSize: 13, cursor: "pointer", fontWeight: 600,
+            }}>❌ Annuler la mise en relation</button>
+          ) : (
+            <>
+              <button onClick={() => onEdit(person)} style={{
+                flex: 1, background: "#fff7ed", color: "#c2410c",
+                border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px",
+                fontSize: 13, cursor: "pointer", fontWeight: 600,
+              }}>✏️ Modifier</button>
+              <button onClick={() => onToggleTermine(person, !isTermine)} style={{
+                flex: 1, background: isTermine ? "#fff7ed" : "#f3f4f6",
+                color: isTermine ? "#c2410c" : "#6b7280",
+                border: `1px solid ${isTermine ? "#fed7aa" : "#e5e7eb"}`,
+                borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+              }}>{isTermine ? "🔄 Je cherche à nouveau" : "🔒 Ne plus chercher"}</button>
+              <button onClick={() => onDelete(person.id)} style={{
+                background: "transparent", color: "#9ca3af",
+                border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px",
+                fontSize: 13, cursor: "pointer",
+              }}>Retirer</button>
+            </>
+          )}
         </div>
       )}
       {isMine && !hasSession && (
@@ -160,6 +175,13 @@ export default function App() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [resetModal, setResetModal] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
+  const [guestConnectModal, setGuestConnectModal] = useState(false);
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestConnectStep, setGuestConnectStep] = useState("email");
+  const [guestConnectTarget, setGuestConnectTarget] = useState(null);
+  const [guestEmailChecking, setGuestEmailChecking] = useState(false);
+  const [cancelConnectionModal, setCancelConnectionModal] = useState(false);
+  const [pendingConnectMode, setPendingConnectMode] = useState(() => !!localStorage.getItem("pendingConnect"));
 
   const showToast = (msg, color = "#ea580c") => {
     setToast({ msg, color });
@@ -233,6 +255,23 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, [resolveCurrentUser]);
+
+  // ─── Auto-connect après magic link ───
+
+  useEffect(() => {
+    if (!currentUser || loading) return;
+    const pendingConnectStr = localStorage.getItem("pendingConnect");
+    if (!pendingConnectStr) return;
+    try {
+      const { targetId } = JSON.parse(pendingConnectStr);
+      const target = [...mandataires, ...mandants].find(p => p.id === targetId);
+      if (target) {
+        localStorage.removeItem("pendingConnect");
+        setPendingConnectMode(false);
+        setConnectModal(target);
+      }
+    } catch { localStorage.removeItem("pendingConnect"); }
+  }, [currentUser, loading, mandataires, mandants]);
 
   // ─── Helpers ───
 
@@ -320,9 +359,19 @@ export default function App() {
   // ─── Mise en relation ───
 
   const handleRequestConnect = (target) => {
+    if (getConnectionStatus(target.id)) {
+      showToast("Cette personne a déjà une mise en relation en cours.", "#ef4444");
+      return;
+    }
     if (!currentUser) {
-      showToast("Inscrivez-vous d'abord.", "#ef4444");
-      setTab("home");
+      setGuestConnectTarget(target);
+      setGuestEmail("");
+      setGuestConnectStep("email");
+      setGuestConnectModal(true);
+      return;
+    }
+    if (myConnection) {
+      showToast("Vous avez déjà une mise en relation. Annulez-la d'abord.", "#ef4444");
       return;
     }
     setConnectModal(target);
@@ -439,6 +488,40 @@ export default function App() {
     setResetModal(false);
     setResetConfirmText("");
     showToast("Base de données réinitialisée.", "#6b7280");
+    fetchData();
+  };
+
+  const handleCheckGuestEmail = async () => {
+    const email = guestEmail.trim().toLowerCase();
+    if (!email) return;
+    setGuestEmailChecking(true);
+    const [{ data: m1 }, { data: m2 }] = await Promise.all([
+      supabase.from("mandataires").select("id").eq("email", email).maybeSingle(),
+      supabase.from("mandants").select("id").eq("email", email).maybeSingle(),
+    ]);
+    setGuestEmailChecking(false);
+    if (m1 || m2) {
+      await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+      setGuestConnectStep("sent");
+    } else {
+      const targetType = mandataires.find(p => p.id === guestConnectTarget.id) ? "mandataire" : "mandant";
+      const neededType = targetType === "mandataire" ? "mandant" : "mandataire";
+      localStorage.setItem("pendingConnect", JSON.stringify({ targetId: guestConnectTarget.id }));
+      setPendingConnectMode(true);
+      setGuestConnectModal(false);
+      setForm(prev => ({ ...prev, email }));
+      setFormType(neededType);
+      setTab("form");
+    }
+  };
+
+  const handleCancelConnection = () => setCancelConnectionModal(true);
+
+  const doDeleteConnection = async () => {
+    if (!myConnection) return;
+    await supabase.from("connections").delete().eq("id", myConnection.id);
+    setCancelConnectionModal(false);
+    showToast("Mise en relation annulée.", "#6b7280");
     fetchData();
   };
 
@@ -568,6 +651,11 @@ export default function App() {
                       Consultez l'email envoyé à <strong>{myPerson.email.replace(/(.{2})(.*)(@.*)/, "$1***$3")}</strong> pour les coordonnées de votre binôme.
                     </p>
                   )}
+                  <button onClick={handleCancelConnection} style={{
+                    marginTop: 10, width: "100%", background: "#fff", color: "#ef4444",
+                    border: "1px solid #fca5a5", borderRadius: 8, padding: "8px 12px",
+                    fontSize: 13, cursor: "pointer", fontWeight: 600,
+                  }}>❌ Annuler la mise en relation</button>
                 </div>
               )}
 
@@ -596,6 +684,20 @@ export default function App() {
                 <div style={{ marginTop: 10, fontSize: 12, color: "#92400e", background: "#fef3c7", borderRadius: 8, padding: "6px 10px" }}>
                   ⚠️ Vous ne pouvez détenir qu'<strong>une seule procuration</strong> établie en France.
                 </div>
+                {!currentUser && (
+                  <button onClick={() => { setFormType("mandataire"); setTab("form"); }} style={{
+                    marginTop: 12, width: "100%", background: "linear-gradient(135deg, #ea580c, #c2410c)",
+                    color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px",
+                    fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  }}>🙋 M'inscrire comme mandataire</button>
+                )}
+                {currentUser?.type === "mandataire" && (
+                  <button onClick={() => setTab("mandants")} style={{
+                    marginTop: 12, width: "100%", background: "transparent",
+                    color: "#c2410c", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 16px",
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}>Voir les mandants disponibles →</button>
+                )}
               </div>
 
               {/* Cas 2 — Absent */}
@@ -618,43 +720,35 @@ export default function App() {
                     <span>{content}</span>
                   </div>
                 ))}
+                {!currentUser && (
+                  <button onClick={() => { setFormType("mandant"); setTab("form"); }} style={{
+                    marginTop: 12, width: "100%", background: "linear-gradient(135deg, #d97706, #b45309)",
+                    color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px",
+                    fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  }}>📋 M'inscrire comme mandant</button>
+                )}
+                {currentUser?.type === "mandant" && (
+                  <button onClick={() => setTab("mandataires")} style={{
+                    marginTop: 12, width: "100%", background: "transparent",
+                    color: "#b45309", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 16px",
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}>Voir les mandataires disponibles →</button>
+                )}
               </div>
 
-              <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 14, marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 14, marginBottom: 8, display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 20 }}>🔒</span>
                 <p style={{ margin: 0, fontSize: 12, color: "#0c4a6e", lineHeight: 1.5 }}>
                   <strong>Confidentialité :</strong> vos coordonnées ne sont jamais affichées publiquement. Elles ne sont transmises qu'en cas de mise en relation.
                 </p>
               </div>
-
-              {!currentUser ? (
-                <div style={{ display: "flex", gap: 12, flexDirection: "column" }}>
-                  <button onClick={() => { setFormType("mandataire"); setTab("form"); }} style={{
-                    background: "linear-gradient(135deg, #ea580c, #c2410c)", color: "#fff",
-                    border: "none", borderRadius: 12, padding: "18px 24px", fontSize: 16,
-                    fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 15px rgba(234,88,12,0.3)",
-                  }}>🙋 Je serai présent(e) — Devenir mandataire</button>
-                  <button onClick={() => { setFormType("mandant"); setTab("form"); }} style={{
-                    background: "linear-gradient(135deg, #d97706, #b45309)", color: "#fff",
-                    border: "none", borderRadius: 12, padding: "18px 24px", fontSize: 16,
-                    fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 15px rgba(217,119,6,0.3)",
-                  }}>📋 Je serai absent(e) — Chercher un mandataire</button>
-                </div>
-              ) : (
-                <div style={{ background: "#fff7ed", borderRadius: 12, padding: 16, border: "1px solid #fed7aa", textAlign: "center" }}>
-                  <p style={{ margin: "0 0 8px", fontSize: 14, color: "#9a3412", fontWeight: 600 }}>Vous êtes inscrit(e) comme {currentUser.type}.</p>
-                  <p style={{ margin: 0, fontSize: 13, color: "#c2410c" }}>
-                    Consultez les {currentUser.type === "mandataire" ? "mandants" : "mandataires"} disponibles.
-                  </p>
-                </div>
-              )}
             </div>
           )}
 
           {/* ═══ FORMULAIRE ═══ */}
           {tab === "form" && formType && (
             <div>
-              <button onClick={() => setTab("home")} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, marginBottom: 16 }}>← Retour</button>
+              <button onClick={() => { setTab("home"); setPendingConnectMode(false); localStorage.removeItem("pendingConnect"); }} style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: 14, marginBottom: 16 }}>← Retour</button>
               <h2 style={{ margin: "0 0 20px", fontSize: 20, color: "#1f2937" }}>
                 {formType === "mandataire" ? "🙋 Inscription mandataire" : "📋 Inscription mandant"}
               </h2>
@@ -705,7 +799,7 @@ export default function App() {
                 color: "#fff", fontSize: 16, fontWeight: 700,
                 cursor: submitting ? "not-allowed" : "pointer",
                 opacity: submitting ? 0.7 : 1,
-              }}>{submitting ? "Envoi en cours…" : "Valider mon inscription"}</button>
+              }}>{submitting ? "Envoi en cours…" : pendingConnectMode ? "Valider et mise en relation" : "Valider mon inscription"}</button>
             </div>
           )}
 
@@ -816,8 +910,10 @@ export default function App() {
                         onDelete={(id) => handleDelete(tab === "mandataires" ? "mandataire" : "mandant", id)}
                         onEdit={handleEditOpen}
                         onToggleTermine={handleToggleTermine}
+                        onCancelConnection={handleCancelConnection}
                         currentUserId={currentUser?.id}
                         hasSession={!!session}
+                        myHasConnection={!!myConnection}
                       />
                     ))}
                   </div>
@@ -1077,6 +1173,74 @@ export default function App() {
             fontWeight: 600, fontSize: 14, cursor: "pointer",
           }}>Annuler</button>
         </div>
+      </Modal>
+
+      {/* Modal annulation mise en relation */}
+      <Modal open={cancelConnectionModal} onClose={() => setCancelConnectionModal(false)}>
+        <div>
+          <h3 style={{ margin: "0 0 12px", fontSize: 20, color: "#1f2937" }}>❌ Annuler la mise en relation ?</h3>
+          <p style={{ fontSize: 14, color: "#6b7280", marginBottom: 20, lineHeight: 1.6 }}>
+            La mise en relation sera annulée pour <strong>les deux parties</strong>. Vous pourrez en démarrer une nouvelle ensuite.
+          </p>
+          <button onClick={doDeleteConnection} style={{
+            width: "100%", padding: "12px", borderRadius: 10, border: "none",
+            background: "#ef4444", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 8,
+          }}>Oui, annuler la mise en relation</button>
+          <button onClick={() => setCancelConnectionModal(false)} style={{
+            width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #e5e7eb",
+            background: "#fff", color: "#6b7280", fontWeight: 600, fontSize: 14, cursor: "pointer",
+          }}>Non, garder</button>
+        </div>
+      </Modal>
+
+      {/* Modal flux invité : demande de mise en relation sans compte */}
+      <Modal open={guestConnectModal} onClose={() => setGuestConnectModal(false)}>
+        {guestConnectStep === "email" ? (
+          <div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 20, color: "#1f2937" }}>🤝 Demande de mise en relation</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280", lineHeight: 1.6 }}>
+              Vous souhaitez être mis(e) en relation avec <strong>{guestConnectTarget?.prenom} {guestConnectTarget?.nom?.charAt(0)}.</strong><br />
+              Entrez votre email pour continuer.
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Votre email</label>
+              <input
+                type="email" placeholder="votre@email.com" value={guestEmail}
+                onChange={e => setGuestEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleCheckGuestEmail()}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid #d1d5db", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+            <button onClick={handleCheckGuestEmail} disabled={guestEmailChecking || !guestEmail} style={{
+              width: "100%", padding: "13px", borderRadius: 10, border: "none",
+              background: guestEmail ? "linear-gradient(135deg, #ea580c, #c2410c)" : "#d1d5db",
+              color: "#fff", fontWeight: 700, fontSize: 15,
+              cursor: guestEmail && !guestEmailChecking ? "pointer" : "not-allowed",
+              opacity: guestEmailChecking ? 0.7 : 1, marginBottom: 8,
+            }}>{guestEmailChecking ? "Vérification…" : "Continuer"}</button>
+            <button onClick={() => setGuestConnectModal(false)} style={{
+              width: "100%", padding: "11px", borderRadius: 10,
+              border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280",
+              fontWeight: 600, fontSize: 14, cursor: "pointer",
+            }}>Annuler</button>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
+            <h3 style={{ margin: "0 0 12px", fontSize: 20, color: "#1f2937" }}>Lien envoyé !</h3>
+            <p style={{ fontSize: 14, color: "#6b7280", lineHeight: 1.6, marginBottom: 8 }}>
+              Un lien de connexion a été envoyé à <strong>{guestEmail}</strong>.
+            </p>
+            <p style={{ fontSize: 13, color: "#9a3412", marginBottom: 24, lineHeight: 1.6 }}>
+              Connectez-vous d'abord via ce lien, puis revenez cliquer sur le profil de <strong>{guestConnectTarget?.prenom}</strong>.
+            </p>
+            <button onClick={() => setGuestConnectModal(false)} style={{
+              width: "100%", padding: "12px", borderRadius: 10, border: "none",
+              background: "linear-gradient(135deg, #ea580c, #c2410c)", color: "#fff",
+              fontWeight: 700, fontSize: 14, cursor: "pointer",
+            }}>OK, j'ai compris</button>
+          </div>
+        )}
       </Modal>
 
       <footer style={{ textAlign: "center", padding: "24px 16px 32px", color: "#9ca3af", fontSize: 12 }}>
