@@ -295,8 +295,7 @@ export default function App() {
     setPendingEmail(form.email);
     setForm({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "" });
     setFormType(null);
-    setTab("home");
-    showToast("Inscription enregistrée ! Vérifiez votre email pour activer votre compte.");
+    setTab("confirmation");
     fetchData();
   };
 
@@ -508,16 +507,6 @@ export default function App() {
           {/* ═══ HOME ═══ */}
           {tab === "home" && (
             <div>
-              {/* Bannière email en attente de confirmation */}
-              {pendingEmail && !session && (
-                <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 16, marginBottom: 20 }}>
-                  <p style={{ margin: 0, fontSize: 14, color: "#0c4a6e", lineHeight: 1.6 }}>
-                    ✉ <strong>Vérifiez votre email !</strong> Un lien de connexion a été envoyé à <strong>{pendingEmail}</strong>.
-                    Cliquez dessus pour activer votre compte et pouvoir modifier votre inscription.
-                  </p>
-                </div>
-              )}
-
               {myPerson && myConnection && (
                 <div style={{ marginBottom: 20 }}>
                   <ConnectionStatus status={myConnection.status} />
@@ -638,6 +627,64 @@ export default function App() {
                 cursor: submitting ? "not-allowed" : "pointer",
                 opacity: submitting ? 0.7 : 1,
               }}>{submitting ? "Envoi en cours…" : "Valider mon inscription"}</button>
+            </div>
+          )}
+
+          {/* ═══ CONFIRMATION EMAIL ═══ */}
+          {tab === "confirmation" && pendingEmail && (
+            <div style={{ textAlign: "center", padding: "16px 8px" }}>
+              {/* Icône */}
+              <div style={{
+                width: 80, height: 80, borderRadius: "50%", margin: "0 auto 24px",
+                background: "linear-gradient(135deg, #ea580c, #f97316)",
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 36,
+              }}>✉️</div>
+
+              <h2 style={{ margin: "0 0 8px", fontSize: 22, color: "#1f2937", fontWeight: 800 }}>
+                Vérifiez votre email !
+              </h2>
+              <p style={{ margin: "0 0 24px", fontSize: 15, color: "#6b7280", lineHeight: 1.6 }}>
+                Un lien de connexion vient d'être envoyé à
+              </p>
+
+              {/* Email mis en valeur */}
+              <div style={{
+                background: "#fff7ed", border: "2px solid #fed7aa", borderRadius: 12,
+                padding: "14px 20px", marginBottom: 28, display: "inline-block",
+              }}>
+                <span style={{ fontWeight: 800, fontSize: 16, color: "#c2410c" }}>{pendingEmail}</span>
+              </div>
+
+              {/* Étapes */}
+              <div style={{ background: "#f9fafb", borderRadius: 12, padding: "20px 20px", marginBottom: 24, textAlign: "left" }}>
+                <p style={{ margin: "0 0 14px", fontSize: 13, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: 1 }}>Que faire maintenant ?</p>
+                {[
+                  ["📬", "Ouvrez votre boîte mail"],
+                  ["🔗", "Cliquez sur le lien « Activer mon compte »"],
+                  ["✅", "Vous serez connecté(e) automatiquement"],
+                ].map(([icon, text], i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: i < 2 ? 12 : 0 }}>
+                    <div style={{
+                      width: 36, height: 36, borderRadius: "50%", background: "#fff",
+                      border: "1.5px solid #e5e7eb", display: "flex", alignItems: "center",
+                      justifyContent: "center", fontSize: 18, flexShrink: 0,
+                    }}>{icon}</div>
+                    <span style={{ fontSize: 14, color: "#374151", fontWeight: 500 }}>{text}</span>
+                  </div>
+                ))}
+              </div>
+
+              <p style={{ margin: "0 0 24px", fontSize: 12, color: "#9ca3af", lineHeight: 1.6 }}>
+                Le lien expire dans <strong>24 heures</strong>. Vérifiez aussi vos spams si vous ne le trouvez pas.
+              </p>
+
+              {/* Bouton retour */}
+              <button onClick={() => setTab("home")} style={{
+                width: "100%", padding: "14px", borderRadius: 12, border: "none",
+                background: "linear-gradient(135deg, #ea580c, #c2410c)",
+                color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
+                boxShadow: "0 4px 15px rgba(234,88,12,0.3)",
+              }}>← Retour à l'accueil</button>
             </div>
           )}
 
