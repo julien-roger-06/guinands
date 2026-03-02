@@ -469,10 +469,10 @@ export default function App() {
         </div>
 
         <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
-          Val d'Allos · Le Seignus · 04260
+          Allos 04260
         </div>
         <h1 style={{ margin: "6px 0 2px", fontSize: 22, fontWeight: 800 }}>Procurations Électorales</h1>
-        <p style={{ margin: 0, opacity: 0.85, fontSize: 14 }}>Élections des 15 et 22 mars 2026</p>
+        <p style={{ margin: 0, opacity: 0.85, fontSize: 14 }}>Élections municipales des 15 et 22 mars 2026</p>
 
         <div style={{ display: "flex", justifyContent: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
           {[
