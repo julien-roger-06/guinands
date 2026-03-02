@@ -481,6 +481,12 @@ export default function App() {
     }
   };
 
+  const handleAdminDeleteConnection = async (connectionId) => {
+    await supabase.from("connections").delete().eq("id", connectionId);
+    showToast("Mise en relation supprimée.", "#6b7280");
+    fetchData();
+  };
+
   const handleResetDB = async () => {
     await supabase.from("connections").delete().not("id", "is", null);
     await supabase.from("mandataires").delete().not("id", "is", null);
@@ -661,8 +667,44 @@ export default function App() {
 
               <h3 style={{ margin: "0 0 12px", color: "#1f2937", fontSize: 16 }}>ℹ️ Comment ça marche ?</h3>
 
-              {/* Cas 1 — Présent */}
-              <div style={{ background: "#fff7ed", borderRadius: 12, padding: 16, marginBottom: 12, border: "1px solid #fed7aa" }}>
+              {/* Cas 1 — Absent (en premier) */}
+              <div style={{ background: "#fffbeb", borderRadius: 12, padding: 16, marginBottom: 12, border: "1px solid #fde68a" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 22 }}>📋</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>Je serai absent(e) le jour du vote</div>
+                    <div style={{ fontSize: 12, color: "#b45309" }}>→ Je cherche un mandataire</div>
+                  </div>
+                </div>
+                {[
+                  ["Rendez-vous dans l'onglet ", <strong key="a">Mandants (absents)</strong>, " et inscrivez-vous."],
+                  ["Parcourez l'onglet ", <strong key="b">Mandataires (présents)</strong>, " et cliquez sur ", <strong key="c">« Demander la mise en relation »</strong>, " sur le profil de votre choix."],
+                  ["Un ", <strong key="d">email confidentiel</strong>, " est envoyé aux deux parties avec vos coordonnées respectives."],
+                  ["Établissez ensemble la procuration sur ", <strong key="e">maprocuration.gouv.fr</strong>, "."],
+                ].map((content, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
+                    <span style={{ background: "#d97706", color: "#fff", borderRadius: "50%", width: 22, height: 22, minWidth: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
+                    <span>{content}</span>
+                  </div>
+                ))}
+                {!currentUser && (
+                  <button onClick={() => { setFormType("mandant"); setTab("form"); }} style={{
+                    marginTop: 12, width: "100%", background: "linear-gradient(135deg, #d97706, #b45309)",
+                    color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px",
+                    fontSize: 14, fontWeight: 700, cursor: "pointer",
+                  }}>📋 M'inscrire comme mandant</button>
+                )}
+                {currentUser?.type === "mandant" && (
+                  <button onClick={() => setTab("mandataires")} style={{
+                    marginTop: 12, width: "100%", background: "transparent",
+                    color: "#b45309", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 16px",
+                    fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  }}>Voir les mandataires disponibles →</button>
+                )}
+              </div>
+
+              {/* Cas 2 — Présent */}
+              <div style={{ background: "#fff7ed", borderRadius: 12, padding: 16, marginBottom: 16, border: "1px solid #fed7aa" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
                   <span style={{ fontSize: 22 }}>🗳️</span>
                   <div>
@@ -697,42 +739,6 @@ export default function App() {
                     color: "#c2410c", border: "1px solid #fed7aa", borderRadius: 10, padding: "10px 16px",
                     fontSize: 13, fontWeight: 600, cursor: "pointer",
                   }}>Voir les mandants disponibles →</button>
-                )}
-              </div>
-
-              {/* Cas 2 — Absent */}
-              <div style={{ background: "#fffbeb", borderRadius: 12, padding: 16, marginBottom: 16, border: "1px solid #fde68a" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-                  <span style={{ fontSize: 22 }}>📋</span>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>Je serai absent(e) le jour du vote</div>
-                    <div style={{ fontSize: 12, color: "#b45309" }}>→ Je cherche un mandataire</div>
-                  </div>
-                </div>
-                {[
-                  ["Rendez-vous dans l'onglet ", <strong key="a">Mandants (absents)</strong>, " et inscrivez-vous."],
-                  ["Parcourez l'onglet ", <strong key="b">Mandataires (présents)</strong>, " et cliquez sur ", <strong key="c">« Demander la mise en relation »</strong>, " sur le profil de votre choix."],
-                  ["Un ", <strong key="d">email confidentiel</strong>, " est envoyé aux deux parties avec vos coordonnées respectives."],
-                  ["Établissez ensemble la procuration sur ", <strong key="e">maprocuration.gouv.fr</strong>, "."],
-                ].map((content, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
-                    <span style={{ background: "#d97706", color: "#fff", borderRadius: "50%", width: 22, height: 22, minWidth: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
-                    <span>{content}</span>
-                  </div>
-                ))}
-                {!currentUser && (
-                  <button onClick={() => { setFormType("mandant"); setTab("form"); }} style={{
-                    marginTop: 12, width: "100%", background: "linear-gradient(135deg, #d97706, #b45309)",
-                    color: "#fff", border: "none", borderRadius: 10, padding: "12px 16px",
-                    fontSize: 14, fontWeight: 700, cursor: "pointer",
-                  }}>📋 M'inscrire comme mandant</button>
-                )}
-                {currentUser?.type === "mandant" && (
-                  <button onClick={() => setTab("mandataires")} style={{
-                    marginTop: 12, width: "100%", background: "transparent",
-                    color: "#b45309", border: "1px solid #fde68a", borderRadius: 10, padding: "10px 16px",
-                    fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  }}>Voir les mandataires disponibles →</button>
                 )}
               </div>
 
@@ -963,6 +969,34 @@ export default function App() {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Mises en relation */}
+              <h3 style={{ margin: "0 0 10px", fontSize: 15, color: "#1f2937" }}>🤝 Mises en relation ({connections.length})</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
+                {connections.length === 0 && <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucune mise en relation.</p>}
+                {connections.map(c => {
+                  const mand = mandataires.find(p => p.id === c.mandataire_id);
+                  const mant = mandants.find(p => p.id === c.mandant_id);
+                  return (
+                    <div key={c.id} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: "#1f2937" }}>
+                          <strong>{mand ? `${mand.prenom} ${mand.nom}` : c.mandataire_id}</strong>
+                          <span style={{ color: "#9ca3af" }}> (mandataire) ↔ </span>
+                          <strong>{mant ? `${mant.prenom} ${mant.nom}` : c.mandant_id}</strong>
+                          <span style={{ color: "#9ca3af" }}> (mandant)</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>
+                          {c.status === "confirmed" ? "✅ confirmée" : "⏳ en cours"}
+                          {mand && ` · ${mand.email}`}
+                          {mant && ` · ${mant.email}`}
+                        </div>
+                      </div>
+                      <button onClick={() => handleAdminDeleteConnection(c.id)} style={{ background: "#fff", color: "#9ca3af", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>🗑️</button>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Zone de danger */}
