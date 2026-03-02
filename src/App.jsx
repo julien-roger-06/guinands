@@ -158,6 +158,8 @@ export default function App() {
   const [editModal, setEditModal] = useState(null);
   const [editForm, setEditForm] = useState({ prenom: "", nom: "", tel: "", tours: "both", message: "" });
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [resetModal, setResetModal] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
 
   const showToast = (msg, color = "#ea580c") => {
     setToast({ msg, color });
@@ -244,6 +246,8 @@ export default function App() {
     mandants: mandants.filter(m => !m.termine && !getConnectionStatus(m.id)).length,
     connected: connections.length,
   };
+
+  const isAdmin = session?.user?.email === "julien.roger@me.com";
 
   const myPerson = currentUser
     ? (currentUser.type === "mandataire" ? mandataires : mandants).find(p => p.id === currentUser.id)
@@ -380,7 +384,7 @@ export default function App() {
 
   // ─── Édition ───
 
-  const handleEditOpen = (person) => {
+  const handleEditOpen = (person, personType) => {
     setEditForm({
       prenom: person.prenom,
       nom: person.nom,
@@ -388,7 +392,7 @@ export default function App() {
       tours: person.tours,
       message: person.message || "",
     });
-    setEditModal(person);
+    setEditModal({ ...person, _editType: personType || currentUser?.type });
   };
 
   const handleEditSubmit = async () => {
@@ -397,7 +401,7 @@ export default function App() {
       return;
     }
     setEditSubmitting(true);
-    const table = currentUser.type === "mandataire" ? "mandataires" : "mandants";
+    const table = (editModal._editType || currentUser.type) === "mandataire" ? "mandataires" : "mandants";
     const { error } = await supabase
       .from(table)
       .update({
@@ -428,6 +432,16 @@ export default function App() {
     }
   };
 
+  const handleResetDB = async () => {
+    await supabase.from("connections").delete().not("id", "is", null);
+    await supabase.from("mandataires").delete().not("id", "is", null);
+    await supabase.from("mandants").delete().not("id", "is", null);
+    setResetModal(false);
+    setResetConfirmText("");
+    showToast("Base de données réinitialisée.", "#6b7280");
+    fetchData();
+  };
+
   // ─── Rendu ───
 
   if (loading) return (
@@ -453,7 +467,7 @@ export default function App() {
       {/* HEADER */}
       <header style={{
         background: "linear-gradient(135deg, #7c2d12 0%, #c2410c 40%, #ea580c 70%, #f97316 100%)",
-        color: "#fff", padding: "10px 16px",
+        color: "#fff", padding: "12px 16px",
         boxShadow: "0 4px 20px rgba(234,88,12,0.3)",
         position: "relative", overflow: "hidden",
       }}>
@@ -465,7 +479,7 @@ export default function App() {
 
         <div style={{ maxWidth: 600, margin: "0 auto", display: "flex", alignItems: "center", gap: 14, position: "relative" }}>
           {/* Logo */}
-          <img src="/lsr_logo.png" alt="Le Seignus Renaissance" style={{ width: 72, height: 72, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+          <img src="/lsr_logo.png" alt="Le Seignus Renaissance" style={{ width: 90, height: 90, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
 
           {/* Infos */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -524,6 +538,7 @@ export default function App() {
           { id: "home", icon: "🏠", line1: "Accueil", line2: "" },
           { id: "mandataires", icon: "🗳️", line1: "Mandataires", line2: "(présents)" },
           { id: "mandants", icon: "📋", line1: "Mandants", line2: "(absents)" },
+          ...(isAdmin ? [{ id: "admin", icon: "⚙️", line1: "Admin", line2: "" }] : []),
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex: 1, padding: "10px 8px 14px", border: "none", background: "transparent",
@@ -556,33 +571,59 @@ export default function App() {
                 </div>
               )}
 
-              <div style={{ background: "#fff7ed", borderRadius: 12, padding: 20, marginBottom: 20, border: "1px solid #fed7aa" }}>
-                <h3 style={{ margin: "0 0 10px", color: "#9a3412", fontSize: 16 }}>ℹ️ Comment ça marche ?</h3>
-                <div style={{ fontSize: 14, lineHeight: 1.8, color: "#374151" }}>
-                  {[
-                    ["Inscrivez-vous comme ", <strong key="a">mandataire</strong>, " (présent le jour du vote) ou ", <strong key="b">mandant</strong>, " (absent)."],
-                    ["Parcourez les profils et cliquez sur ", <strong key="c">« Demander la mise en relation »</strong>, "."],
-                    ["Un ", <strong key="d">email confidentiel</strong>, " est envoyé aux deux parties avec les coordonnées de chacun."],
-                    ["Établissez la procuration sur ", <strong key="e">maprocuration.gouv.fr</strong>, "."],
-                  ].map((content, i) => (
-                    <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-                      <span style={{ background: "#ea580c", color: "#fff", borderRadius: "50%", width: 24, height: 24, minWidth: 24, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700 }}>{i + 1}</span>
-                      <span>{content}</span>
-                    </div>
-                  ))}
+              <h3 style={{ margin: "0 0 12px", color: "#1f2937", fontSize: 16 }}>ℹ️ Comment ça marche ?</h3>
+
+              {/* Cas 1 — Présent */}
+              <div style={{ background: "#fff7ed", borderRadius: 12, padding: 16, marginBottom: 12, border: "1px solid #fed7aa" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 22 }}>🗳️</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#9a3412" }}>Je serai présent(e) le jour du vote</div>
+                    <div style={{ fontSize: 12, color: "#c2410c" }}>→ Je deviens mandataire</div>
+                  </div>
+                </div>
+                {[
+                  ["Rendez-vous dans l'onglet ", <strong key="a">Mandataires (présents)</strong>, " et inscrivez-vous."],
+                  ["Parcourez l'onglet ", <strong key="b">Mandants (absents)</strong>, " et cliquez « Demander la mise en relation », ou attendez qu'un absent vous contacte."],
+                  ["Vous recevrez un ", <strong key="c">email confidentiel</strong>, " avec les coordonnées de votre binôme."],
+                  ["Établissez ensemble la procuration sur ", <strong key="d">maprocuration.gouv.fr</strong>, "."],
+                ].map((content, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
+                    <span style={{ background: "#ea580c", color: "#fff", borderRadius: "50%", width: 22, height: 22, minWidth: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
+                    <span>{content}</span>
+                  </div>
+                ))}
+                <div style={{ marginTop: 10, fontSize: 12, color: "#92400e", background: "#fef3c7", borderRadius: 8, padding: "6px 10px" }}>
+                  ⚠️ Vous ne pouvez détenir qu'<strong>une seule procuration</strong> établie en France.
                 </div>
               </div>
 
-              <div style={{ background: "#fefce8", borderRadius: 12, padding: 16, marginBottom: 16, border: "1px solid #fde68a" }}>
-                <p style={{ margin: 0, fontSize: 13, color: "#92400e", lineHeight: 1.6 }}>
-                  ⚠️ <strong>Rappel légal :</strong> un mandataire ne peut détenir qu'<strong>une seule procuration</strong> établie en France. La procuration se fait en ligne sur <strong>maprocuration.gouv.fr</strong>.
-                </p>
+              {/* Cas 2 — Absent */}
+              <div style={{ background: "#fffbeb", borderRadius: 12, padding: 16, marginBottom: 16, border: "1px solid #fde68a" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 22 }}>📋</span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: "#92400e" }}>Je serai absent(e) le jour du vote</div>
+                    <div style={{ fontSize: 12, color: "#b45309" }}>→ Je cherche un mandataire</div>
+                  </div>
+                </div>
+                {[
+                  ["Rendez-vous dans l'onglet ", <strong key="a">Mandants (absents)</strong>, " et inscrivez-vous."],
+                  ["Parcourez l'onglet ", <strong key="b">Mandataires (présents)</strong>, " et cliquez sur ", <strong key="c">« Demander la mise en relation »</strong>, " sur le profil de votre choix."],
+                  ["Un ", <strong key="d">email confidentiel</strong>, " est envoyé aux deux parties avec vos coordonnées respectives."],
+                  ["Établissez ensemble la procuration sur ", <strong key="e">maprocuration.gouv.fr</strong>, "."],
+                ].map((content, i) => (
+                  <div key={i} style={{ display: "flex", gap: 10, marginBottom: 6, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
+                    <span style={{ background: "#d97706", color: "#fff", borderRadius: "50%", width: 22, height: 22, minWidth: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{i + 1}</span>
+                    <span>{content}</span>
+                  </div>
+                ))}
               </div>
 
-              <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 16, marginBottom: 24, display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontSize: 24 }}>🔒</span>
-                <p style={{ margin: 0, fontSize: 13, color: "#0c4a6e", lineHeight: 1.5 }}>
-                  <strong>Confidentialité :</strong> vos coordonnées ne sont jamais affichées. Elles ne sont transmises qu'en cas de mise en relation.
+              <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 14, marginBottom: 24, display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 20 }}>🔒</span>
+                <p style={{ margin: 0, fontSize: 12, color: "#0c4a6e", lineHeight: 1.5 }}>
+                  <strong>Confidentialité :</strong> vos coordonnées ne sont jamais affichées publiquement. Elles ne sont transmises qu'en cas de mise en relation.
                 </p>
               </div>
 
@@ -784,6 +825,63 @@ export default function App() {
               })()}
             </div>
           )}
+
+          {/* ═══ ADMIN ═══ */}
+          {tab === "admin" && isAdmin && (
+            <div>
+              <h2 style={{ margin: "0 0 20px", fontSize: 20, color: "#1f2937" }}>⚙️ Administration</h2>
+
+              {/* Mandataires */}
+              <h3 style={{ margin: "0 0 10px", fontSize: 15, color: "#c2410c" }}>🗳️ Mandataires ({mandataires.length})</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                {mandataires.length === 0 && <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun mandataire.</p>}
+                {mandataires.map(p => (
+                  <div key={p.id} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#1f2937" }}>{p.prenom} {p.nom}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{p.email} · {TOUR_SHORT[p.tours]}{p.termine ? " · 🔒 terminé" : ""}{getConnectionStatus(p.id) ? ` · ${getConnectionStatus(p.id) === "confirmed" ? "✅ confirmé" : "⏳ en cours"}` : ""}</div>
+                      {p.message && <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", marginTop: 2 }}>"{p.message}"</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => handleEditOpen(p, "mandataire")} style={{ background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => handleDelete("mandataire", p.id)} style={{ background: "#fff", color: "#9ca3af", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mandants */}
+              <h3 style={{ margin: "0 0 10px", fontSize: 15, color: "#b45309" }}>📋 Mandants ({mandants.length})</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 32 }}>
+                {mandants.length === 0 && <p style={{ color: "#9ca3af", fontSize: 13 }}>Aucun mandant.</p>}
+                {mandants.map(p => (
+                  <div key={p.id} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#1f2937" }}>{p.prenom} {p.nom}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>{p.email} · {TOUR_SHORT[p.tours]}{p.termine ? " · 🔒 terminé" : ""}{getConnectionStatus(p.id) ? ` · ${getConnectionStatus(p.id) === "confirmed" ? "✅ confirmé" : "⏳ en cours"}` : ""}</div>
+                      {p.message && <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", marginTop: 2 }}>"{p.message}"</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button onClick={() => handleEditOpen(p, "mandant")} style={{ background: "#fffbeb", color: "#b45309", border: "1px solid #fde68a", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>✏️</button>
+                      <button onClick={() => handleDelete("mandant", p.id)} style={{ background: "#fff", color: "#9ca3af", border: "1px solid #e5e7eb", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer" }}>🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Zone de danger */}
+              <div style={{ background: "#fef2f2", border: "2px solid #fecaca", borderRadius: 12, padding: 20 }}>
+                <h3 style={{ margin: "0 0 8px", fontSize: 15, color: "#991b1b" }}>⚠️ Zone dangereuse</h3>
+                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#7f1d1d", lineHeight: 1.5 }}>
+                  La réinitialisation supprime <strong>toutes les inscriptions et connexions</strong> de façon irréversible.
+                </p>
+                <button onClick={() => setResetModal(true)} style={{
+                  background: "#ef4444", color: "#fff", border: "none", borderRadius: 8,
+                  padding: "10px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                }}>🗑️ Réinitialiser la base de données</button>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
@@ -943,6 +1041,37 @@ export default function App() {
             opacity: editSubmitting ? 0.7 : 1, marginBottom: 8,
           }}>{editSubmitting ? "Enregistrement…" : "Enregistrer les modifications"}</button>
           <button onClick={() => setEditModal(null)} style={{
+            width: "100%", padding: "11px", borderRadius: 10,
+            border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280",
+            fontWeight: 600, fontSize: 14, cursor: "pointer",
+          }}>Annuler</button>
+        </div>
+      </Modal>
+
+      {/* Modal réinitialisation DB (admin) */}
+      <Modal open={resetModal} onClose={() => { setResetModal(false); setResetConfirmText(""); }}>
+        <div>
+          <h3 style={{ margin: "0 0 8px", fontSize: 20, color: "#991b1b" }}>⚠️ Réinitialiser la base de données</h3>
+          <p style={{ margin: "0 0 8px", fontSize: 14, color: "#7f1d1d", lineHeight: 1.6 }}>
+            Cette action supprime <strong>toutes les inscriptions et toutes les connexions</strong>. Elle est <strong>irréversible</strong>.
+          </p>
+          <p style={{ margin: "0 0 16px", fontSize: 13, color: "#374151" }}>
+            Pour confirmer, tapez exactement : <strong>RÉINITIALISER</strong>
+          </p>
+          <input
+            value={resetConfirmText}
+            onChange={e => setResetConfirmText(e.target.value)}
+            placeholder="RÉINITIALISER"
+            style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "2px solid #fca5a5", fontSize: 15, outline: "none", boxSizing: "border-box", marginBottom: 16, fontFamily: "monospace" }}
+          />
+          <button onClick={handleResetDB} disabled={resetConfirmText !== "RÉINITIALISER"} style={{
+            width: "100%", padding: "13px", borderRadius: 10, border: "none",
+            background: resetConfirmText === "RÉINITIALISER" ? "#ef4444" : "#d1d5db",
+            color: "#fff", fontWeight: 700, fontSize: 15,
+            cursor: resetConfirmText === "RÉINITIALISER" ? "pointer" : "not-allowed",
+            marginBottom: 8,
+          }}>Confirmer la suppression totale</button>
+          <button onClick={() => { setResetModal(false); setResetConfirmText(""); }} style={{
             width: "100%", padding: "11px", borderRadius: 10,
             border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280",
             fontWeight: 600, fontSize: 14, cursor: "pointer",
