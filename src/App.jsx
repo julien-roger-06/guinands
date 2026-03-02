@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import Logo from "./components/Logo";
 
 // ─── Petits composants utilitaires ───
 
@@ -466,7 +465,7 @@ export default function App() {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <Logo size={120} />
+          <img src="/lsr_logo.png" alt="Le Seignus Renaissance" style={{ width: 120, height: 120, borderRadius: "50%", objectFit: "cover" }} />
         </div>
 
         <div style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", opacity: 0.8 }}>
