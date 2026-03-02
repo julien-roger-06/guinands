@@ -489,8 +489,8 @@ export default function App() {
       <nav style={{ display: "flex", gap: 4, padding: "16px 16px 0", maxWidth: 600, margin: "0 auto" }}>
         {[
           { id: "home", label: "Accueil", icon: "🏠" },
-          { id: "mandataires", label: "Mandataires", icon: "🙋" },
-          { id: "mandants", label: "Mandants", icon: "📋" },
+          { id: "mandataires", label: "Mandataires (présents)", icon: "🙋" },
+          { id: "mandants", label: "Mandants (absents)", icon: "📋" },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex: 1, padding: "10px 8px", border: "none", borderRadius: "10px 10px 0 0",
