@@ -1,6 +1,14 @@
-import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
 const TOUR_LABELS = {
   tour1: "1er tour (15 mars)",
@@ -19,17 +27,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Emails manquants' });
   }
 
-  // En mode test (domaine onboarding@resend.dev), les emails ne peuvent être
-  // envoyés qu'à l'adresse vérifiée du compte Resend.
-  // Passer RESEND_TO_OVERRIDE=julien.roger@me.com dans les variables d'env
-  // pour rediriger tous les emails vers cette adresse pendant les tests.
-  const toOverride = process.env.RESEND_TO_OVERRIDE || null;
-
   try {
     // Email au mandataire
-    await resend.emails.send({
-      from: 'Le Seignus Renaissance <onboarding@resend.dev>',
-      to: toOverride || mandataire.email,
+    await transporter.sendMail({
+      from: `"Le Seignus Renaissance" <${process.env.GMAIL_USER}>`,
+      to: mandataire.email,
       subject: '🤝 Mise en relation — Procuration Allos',
       html: `
         <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
@@ -49,13 +51,13 @@ export default async function handler(req, res) {
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">Le Seignus Renaissance — Initiative citoyenne pour Allos</p>
         </div>
-      `
+      `,
     });
 
     // Email au mandant
-    await resend.emails.send({
-      from: 'Le Seignus Renaissance <onboarding@resend.dev>',
-      to: toOverride || mandant.email,
+    await transporter.sendMail({
+      from: `"Le Seignus Renaissance" <${process.env.GMAIL_USER}>`,
+      to: mandant.email,
       subject: '🤝 Mise en relation — Procuration Allos',
       html: `
         <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto;">
@@ -75,7 +77,7 @@ export default async function handler(req, res) {
           <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
           <p style="color: #9ca3af; font-size: 12px;">Le Seignus Renaissance — Initiative citoyenne pour Allos</p>
         </div>
-      `
+      `,
     });
 
     res.status(200).json({ success: true });
