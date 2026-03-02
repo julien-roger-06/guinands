@@ -72,7 +72,7 @@ function ConnectionStatus({ status }) {
   return null;
 }
 
-function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, currentUserId }) {
+function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, currentUserId, hasSession }) {
   const isM = type === "mandataire";
   const accent = isM ? "#c2410c" : "#b45309";
   const isMine = person.id === currentUserId;
@@ -111,12 +111,24 @@ function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete
           fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%",
         }}>🤝 Demander la mise en relation</button>
       )}
-      {isMine && (
-        <button onClick={() => onDelete(person.id)} style={{
-          marginTop: 10, background: "transparent", color: "#9ca3af",
-          border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px",
-          fontSize: 13, cursor: "pointer",
-        }}>Retirer mon inscription</button>
+      {isMine && hasSession && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <button onClick={() => onEdit(person)} style={{
+            flex: 1, background: "#fff7ed", color: "#c2410c",
+            border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px",
+            fontSize: 13, cursor: "pointer", fontWeight: 600,
+          }}>✏️ Modifier</button>
+          <button onClick={() => onDelete(person.id)} style={{
+            background: "transparent", color: "#9ca3af",
+            border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px",
+            fontSize: 13, cursor: "pointer",
+          }}>Retirer</button>
+        </div>
+      )}
+      {isMine && !hasSession && (
+        <p style={{ marginTop: 10, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
+          Connectez-vous via le lien reçu par email pour modifier ou retirer votre inscription.
+        </p>
       )}
     </div>
   );
@@ -129,21 +141,28 @@ export default function App() {
   const [mandants, setMandants] = useState([]);
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null); // { id, type }
+  const [pendingEmail, setPendingEmail] = useState(null);
   const [tab, setTab] = useState("home");
   const [formType, setFormType] = useState(null);
   const [connectModal, setConnectModal] = useState(null);
   const [filterTour, setFilterTour] = useState("all");
-  const [currentUser, setCurrentUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("guinands-user")); } catch { return null; }
-  });
   const [form, setForm] = useState({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "", certifie: false });
   const [toast, setToast] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [authModal, setAuthModal] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authStep, setAuthStep] = useState("input");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [editModal, setEditModal] = useState(null);
+  const [editForm, setEditForm] = useState({ prenom: "", nom: "", tel: "", tours: "both", message: "" });
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const showToast = (msg, color = "#ea580c") => {
     setToast({ msg, color });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 4000);
   };
 
   // ─── Charger les données depuis Supabase ───
@@ -160,6 +179,7 @@ export default function App() {
     setLoading(false);
   }, []);
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // ─── Temps réel : écouter les changements ───
@@ -174,13 +194,44 @@ export default function App() {
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
-  // ─── Sauvegarder l'utilisateur courant ───
+  // ─── Résoudre l'utilisateur courant depuis la session Supabase ───
 
-  const saveUser = (u) => {
-    setCurrentUser(u);
-    if (u) localStorage.setItem("guinands-user", JSON.stringify(u));
-    else localStorage.removeItem("guinands-user");
-  };
+  const resolveCurrentUser = useCallback(async (user) => {
+    if (!user) { setCurrentUser(null); return; }
+    for (const [table, type] of [["mandataires", "mandataire"], ["mandants", "mandant"]]) {
+      const { data } = await supabase
+        .from(table)
+        .select("id, user_id")
+        .eq("email", user.email)
+        .maybeSingle();
+      if (data) {
+        if (!data.user_id) {
+          await supabase.from(table).update({ user_id: user.id }).eq("id", data.id);
+        }
+        if (!data.user_id || data.user_id === user.id) {
+          setCurrentUser({ id: data.id, type });
+          setPendingEmail(null);
+          return;
+        }
+      }
+    }
+    setCurrentUser(null);
+  }, []);
+
+  // ─── Authentification Supabase ───
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) resolveCurrentUser(session.user);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) resolveCurrentUser(session.user);
+      else setCurrentUser(null);
+    });
+    return () => subscription.unsubscribe();
+  }, [resolveCurrentUser]);
 
   // ─── Helpers ───
 
@@ -204,6 +255,32 @@ export default function App() {
 
   const filtered = (list) => filterTour === "all" ? list : list.filter(p => p.tours === filterTour || p.tours === "both");
 
+  // ─── Magic link ───
+
+  const handleSendMagicLink = async () => {
+    if (!authEmail) return;
+    setAuthLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: authEmail,
+      options: { shouldCreateUser: true },
+    });
+    setAuthLoading(false);
+    if (error) {
+      showToast("Erreur : " + error.message, "#ef4444");
+    } else {
+      setAuthStep("sent");
+    }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setCurrentUser(null);
+    setPendingEmail(null);
+    setAuthEmail("");
+    setAuthStep("input");
+  };
+
   // ─── Inscription ───
 
   const handleSubmit = async () => {
@@ -217,22 +294,28 @@ export default function App() {
     }
     setSubmitting(true);
     const table = formType === "mandataire" ? "mandataires" : "mandants";
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from(table)
-      .insert([{ prenom: form.prenom, nom: form.nom, email: form.email, tel: form.tel || null, tours: form.tours, message: form.message || null }])
-      .select()
-      .single();
+      .insert([{ prenom: form.prenom, nom: form.nom, email: form.email, tel: form.tel || null, tours: form.tours, message: form.message || null }]);
 
-    setSubmitting(false);
     if (error) {
+      setSubmitting(false);
       showToast("Erreur : " + error.message, "#ef4444");
       return;
     }
-    saveUser({ id: data.id, type: formType });
+
+    // Envoyer le magic link pour activer le compte
+    await supabase.auth.signInWithOtp({
+      email: form.email,
+      options: { shouldCreateUser: true },
+    });
+
+    setSubmitting(false);
+    setPendingEmail(form.email);
     setForm({ nom: "", prenom: "", email: "", tel: "", tours: "both", message: "", certifie: false });
     setFormType(null);
-    setTab(formType === "mandataire" ? "mandants" : "mandataires");
-    showToast("Inscription enregistrée !");
+    setTab("home");
+    showToast("Inscription enregistrée ! Vérifiez votre email pour activer votre compte.");
     fetchData();
   };
 
@@ -259,7 +342,6 @@ export default function App() {
     }]);
 
     if (!error) {
-      // Envoyer l'email via l'API serverless
       try {
         const mandataireData = isM ? myPerson : connectModal;
         const mandantData = isM ? connectModal : myPerson;
@@ -292,10 +374,54 @@ export default function App() {
     const table = type === "mandataire" ? "mandataires" : "mandants";
     await supabase.from("connections").delete().or(`mandataire_id.eq.${id},mandant_id.eq.${id}`);
     await supabase.from(table).delete().eq("id", id);
-    if (currentUser?.id === id) saveUser(null);
     setConfirmDelete(null);
     showToast("Inscription retirée.", "#6b7280");
+    if (currentUser?.id === id) {
+      await supabase.auth.signOut();
+      setSession(null);
+      setCurrentUser(null);
+    }
     fetchData();
+  };
+
+  // ─── Édition ───
+
+  const handleEditOpen = (person) => {
+    setEditForm({
+      prenom: person.prenom,
+      nom: person.nom,
+      tel: person.tel || "",
+      tours: person.tours,
+      message: person.message || "",
+    });
+    setEditModal(person);
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editForm.prenom || !editForm.nom) {
+      showToast("Veuillez remplir les champs obligatoires.", "#ef4444");
+      return;
+    }
+    setEditSubmitting(true);
+    const table = currentUser.type === "mandataire" ? "mandataires" : "mandants";
+    const { error } = await supabase
+      .from(table)
+      .update({
+        prenom: editForm.prenom,
+        nom: editForm.nom,
+        tel: editForm.tel || null,
+        tours: editForm.tours,
+        message: editForm.message || null,
+      })
+      .eq("id", editModal.id);
+    setEditSubmitting(false);
+    if (error) {
+      showToast("Erreur : " + error.message, "#ef4444");
+    } else {
+      setEditModal(null);
+      showToast("Inscription modifiée !");
+      fetchData();
+    }
   };
 
   // ─── Texte certification ───
@@ -362,11 +488,26 @@ export default function App() {
           ))}
         </div>
 
-        {myPerson && (
-          <div style={{ marginTop: 12, background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "8px 14px", display: "inline-block" }}>
-            <span style={{ fontSize: 13 }}>👤 <strong>{myPerson.prenom} {myPerson.nom.charAt(0)}.</strong> ({currentUser.type})</span>
-          </div>
-        )}
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {myPerson && (
+            <div style={{ background: "rgba(255,255,255,0.12)", borderRadius: 10, padding: "8px 14px" }}>
+              <span style={{ fontSize: 13 }}>👤 <strong>{myPerson.prenom} {myPerson.nom.charAt(0)}.</strong> ({currentUser.type})</span>
+            </div>
+          )}
+          {session ? (
+            <button onClick={handleSignOut} style={{
+              background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+              color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 12,
+              cursor: "pointer", fontWeight: 600,
+            }}>Se déconnecter</button>
+          ) : (
+            <button onClick={() => { setAuthModal(true); setAuthStep("input"); setAuthEmail(""); }} style={{
+              background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.3)",
+              color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 12,
+              cursor: "pointer", fontWeight: 600,
+            }}>🔑 Se connecter</button>
+          )}
+        </div>
       </header>
 
       {/* NAV */}
@@ -392,6 +533,16 @@ export default function App() {
           {/* ═══ HOME ═══ */}
           {tab === "home" && (
             <div>
+              {/* Bannière email en attente de confirmation */}
+              {pendingEmail && !session && (
+                <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                  <p style={{ margin: 0, fontSize: 14, color: "#0c4a6e", lineHeight: 1.6 }}>
+                    ✉ <strong>Vérifiez votre email !</strong> Un lien de connexion a été envoyé à <strong>{pendingEmail}</strong>.
+                    Cliquez dessus pour activer votre compte et pouvoir modifier votre inscription.
+                  </p>
+                </div>
+              )}
+
               {myPerson && myConnection && (
                 <div style={{ marginBottom: 20 }}>
                   <ConnectionStatus status={myConnection.status} />
@@ -566,7 +717,9 @@ export default function App() {
                         connectionStatus={getConnectionStatus(p.id)}
                         onRequestConnect={handleRequestConnect}
                         onDelete={(id) => handleDelete(tab === "mandataires" ? "mandataire" : "mandant", id)}
+                        onEdit={handleEditOpen}
                         currentUserId={currentUser?.id}
+                        hasSession={!!session}
                       />
                     ))}
                   </div>
@@ -629,6 +782,113 @@ export default function App() {
           <button onClick={() => setConfirmDelete(null)} style={{
             width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #e5e7eb",
             background: "#fff", color: "#6b7280", fontWeight: 600, fontSize: 14, cursor: "pointer",
+          }}>Annuler</button>
+        </div>
+      </Modal>
+
+      {/* Modal authentification (magic link) */}
+      <Modal open={authModal} onClose={() => { setAuthModal(false); setAuthStep("input"); setAuthEmail(""); }}>
+        {authStep === "input" ? (
+          <div>
+            <h3 style={{ margin: "0 0 8px", fontSize: 20, color: "#1f2937" }}>🔑 Se connecter</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280", lineHeight: 1.6 }}>
+              Entrez l'email utilisé lors de votre inscription pour recevoir un lien de connexion.
+            </p>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Email d'inscription</label>
+              <input
+                type="email"
+                placeholder="votre@email.com"
+                value={authEmail}
+                onChange={e => setAuthEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSendMagicLink()}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid #d1d5db", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+            <button onClick={handleSendMagicLink} disabled={authLoading || !authEmail} style={{
+              width: "100%", padding: "13px", borderRadius: 10, border: "none",
+              background: authEmail ? "linear-gradient(135deg, #ea580c, #c2410c)" : "#d1d5db",
+              color: "#fff", fontWeight: 700, fontSize: 15,
+              cursor: authEmail && !authLoading ? "pointer" : "not-allowed",
+              opacity: authLoading ? 0.7 : 1, marginBottom: 8,
+            }}>{authLoading ? "Envoi en cours…" : "✉ Recevoir le lien de connexion"}</button>
+            <button onClick={() => { setAuthModal(false); setAuthStep("input"); setAuthEmail(""); }} style={{
+              width: "100%", padding: "11px", borderRadius: 10,
+              border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280",
+              fontWeight: 600, fontSize: 14, cursor: "pointer",
+            }}>Annuler</button>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
+            <h3 style={{ margin: "0 0 12px", fontSize: 20, color: "#1f2937" }}>Email envoyé !</h3>
+            <p style={{ fontSize: 14, color: "#6b7280", lineHeight: 1.6, marginBottom: 24 }}>
+              Un lien de connexion a été envoyé à <strong>{authEmail}</strong>.<br />
+              Cliquez dessus pour vous connecter et accéder à votre inscription.
+            </p>
+            <button onClick={() => { setAuthModal(false); setAuthStep("input"); setAuthEmail(""); }} style={{
+              width: "100%", padding: "12px", borderRadius: 10,
+              border: "none", background: "linear-gradient(135deg, #ea580c, #c2410c)",
+              color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+            }}>OK, j'ai compris</button>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal édition */}
+      <Modal open={!!editModal} onClose={() => setEditModal(null)}>
+        <div>
+          <h3 style={{ margin: "0 0 4px", fontSize: 20, color: "#1f2937" }}>✏️ Modifier mon inscription</h3>
+          <p style={{ margin: "0 0 20px", fontSize: 14, color: "#6b7280" }}>
+            Modifiez les informations de votre profil.
+          </p>
+
+          {[
+            { key: "prenom", label: "Prénom *", ph: "Votre prénom" },
+            { key: "nom", label: "Nom *", ph: "Votre nom de famille" },
+            { key: "tel", label: "Téléphone (optionnel)", ph: "06 ...", type: "tel" },
+          ].map(f => (
+            <div key={f.key} style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>{f.label}</label>
+              <input type={f.type || "text"} placeholder={f.ph} value={editForm[f.key]}
+                onChange={e => setEditForm({ ...editForm, [f.key]: e.target.value })}
+                style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid #d1d5db", fontSize: 15, outline: "none", boxSizing: "border-box" }}
+              />
+            </div>
+          ))}
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Disponibilité *</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[["both", "Les deux tours"], ["tour1", "1er tour (15 mars)"], ["tour2", "2nd tour (22 mars)"]].map(([v, l]) => (
+                <button key={v} onClick={() => setEditForm({ ...editForm, tours: v })} style={{
+                  padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                  border: editForm.tours === v ? "2px solid #ea580c" : "1px solid #d1d5db",
+                  background: editForm.tours === v ? "#fff7ed" : "#fff",
+                  color: editForm.tours === v ? "#9a3412" : "#6b7280",
+                }}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6 }}>Message (optionnel)</label>
+            <textarea placeholder="Un petit mot pour vous présenter…" value={editForm.message}
+              onChange={e => setEditForm({ ...editForm, message: e.target.value })} rows={3}
+              style={{ width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid #d1d5db", fontSize: 14, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+            />
+          </div>
+
+          <button onClick={handleEditSubmit} disabled={editSubmitting} style={{
+            width: "100%", padding: "13px", borderRadius: 10, border: "none",
+            background: "linear-gradient(135deg, #ea580c, #c2410c)", color: "#fff",
+            fontWeight: 700, fontSize: 15, cursor: editSubmitting ? "not-allowed" : "pointer",
+            opacity: editSubmitting ? 0.7 : 1, marginBottom: 8,
+          }}>{editSubmitting ? "Enregistrement…" : "Enregistrer les modifications"}</button>
+          <button onClick={() => setEditModal(null)} style={{
+            width: "100%", padding: "11px", borderRadius: 10,
+            border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280",
+            fontWeight: 600, fontSize: 14, cursor: "pointer",
           }}>Annuler</button>
         </div>
       </Modal>
