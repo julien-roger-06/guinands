@@ -57,11 +57,12 @@ function ConnectionStatus({ status }) {
   return null;
 }
 
-function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, onToggleTermine, onCancelConnection, currentUserId, hasSession, myHasConnection }) {
+function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, onToggleTermine, onCancelConnection, currentUserId, currentUserType, hasSession, myHasConnection }) {
   const isM = type === "mandataire";
   const accent = isM ? "#c2410c" : "#b45309";
   const isMine = person.id === currentUserId;
   const hasConnection = !!connectionStatus;
+  const sameType = currentUserType && currentUserType === type;
   const isTermine = !!person.termine;
 
   return (
@@ -97,14 +98,14 @@ function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete
         </div>
       )}
       {connectionStatus && <ConnectionStatus status={connectionStatus} />}
-      {!hasConnection && !isMine && !isTermine && !myHasConnection && (
+      {!hasConnection && !isMine && !isTermine && !myHasConnection && !sameType && (
         <button onClick={() => onRequestConnect(person)} style={{
           marginTop: 10, background: "linear-gradient(135deg, #ea580c, #c2410c)",
           color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px",
           fontSize: 13, fontWeight: 600, cursor: "pointer", width: "100%",
         }}>🤝 Demander la mise en relation</button>
       )}
-      {!hasConnection && !isMine && !isTermine && myHasConnection && (
+      {!hasConnection && !isMine && !isTermine && myHasConnection && !sameType && (
         <p style={{ marginTop: 10, fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
           Annulez votre mise en relation en cours pour en démarrer une nouvelle.
         </p>
@@ -362,6 +363,14 @@ export default function App() {
     if (getConnectionStatus(target.id)) {
       showToast("Cette personne a déjà une mise en relation en cours.", "#ef4444");
       return;
+    }
+    if (currentUser) {
+      const targetIsMandataire = mandataires.some(m => m.id === target.id);
+      const targetType = targetIsMandataire ? "mandataire" : "mandant";
+      if (currentUser.type === targetType) {
+        showToast("Un mandataire ne peut se mettre en relation qu'avec un mandant, et vice versa.", "#ef4444");
+        return;
+      }
     }
     if (!currentUser) {
       setGuestConnectTarget(target);
@@ -918,6 +927,7 @@ export default function App() {
                         onToggleTermine={handleToggleTermine}
                         onCancelConnection={handleCancelConnection}
                         currentUserId={currentUser?.id}
+                        currentUserType={currentUser?.type}
                         hasSession={!!session}
                         myHasConnection={!!myConnection}
                       />
