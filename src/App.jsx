@@ -57,39 +57,47 @@ function ConnectionStatus({ status }) {
   return null;
 }
 
-function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, currentUserId, hasSession }) {
+function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete, onEdit, onToggleTermine, currentUserId, hasSession }) {
   const isM = type === "mandataire";
   const accent = isM ? "#c2410c" : "#b45309";
   const isMine = person.id === currentUserId;
   const hasConnection = !!connectionStatus;
+  const isTermine = !!person.termine;
 
   return (
     <div style={{
-      background: hasConnection ? "#fafafa" : "#fff",
-      border: `1px solid ${hasConnection ? "#e5e7eb" : "#fed7aa"}`,
+      background: isTermine ? "#f3f4f6" : (hasConnection ? "#fafafa" : "#fff"),
+      border: `1px solid ${isTermine ? "#d1d5db" : (hasConnection ? "#e5e7eb" : "#fed7aa")}`,
       borderRadius: 14, padding: 20, position: "relative", transition: "all 0.2s",
+      opacity: isTermine ? 0.75 : 1,
     }}>
       {isMine && <div style={{ position: "absolute", top: 12, right: 12 }}><Badge color="purple">Vous</Badge></div>}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div style={{
           width: 40, height: 40, borderRadius: "50%",
-          background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+          background: isTermine ? "#d1d5db" : `linear-gradient(135deg, ${accent}, ${accent}cc)`,
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "#fff", fontWeight: 700, fontSize: 16,
         }}>
           {person.prenom[0]}{person.nom[0]}
         </div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 16, color: "#1f2937" }}>{person.prenom} {person.nom.charAt(0)}.</div>
-          <div style={{ fontSize: 13, color: "#6b7280" }}>{isM ? "Mandataire" : "Mandant"}</div>
+          <div style={{ fontWeight: 700, fontSize: 16, color: isTermine ? "#9ca3af" : "#1f2937" }}>{person.prenom} {person.nom.charAt(0)}.</div>
+          <div style={{ fontSize: 13, color: "#9ca3af" }}>{isM ? "Mandataire" : "Mandant"}</div>
         </div>
       </div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
         <Badge color="orange">{TOUR_SHORT[person.tours]}</Badge>
       </div>
       {person.message && <p style={{ fontSize: 14, color: "#4b5563", margin: "0 0 12px", fontStyle: "italic", lineHeight: 1.5 }}>"{person.message}"</p>}
+      {isTermine && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, background: "#e5e7eb", borderRadius: 8, padding: "8px 12px", marginBottom: 10 }}>
+          <span>🔒</span>
+          <span style={{ fontSize: 13, color: "#6b7280" }}>Ne cherche plus de mise en relation</span>
+        </div>
+      )}
       {connectionStatus && <ConnectionStatus status={connectionStatus} />}
-      {!hasConnection && !isMine && (
+      {!hasConnection && !isMine && !isTermine && (
         <button onClick={() => onRequestConnect(person)} style={{
           marginTop: 10, background: "linear-gradient(135deg, #ea580c, #c2410c)",
           color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px",
@@ -97,12 +105,18 @@ function PersonCard({ person, type, connectionStatus, onRequestConnect, onDelete
         }}>🤝 Demander la mise en relation</button>
       )}
       {isMine && hasSession && (
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
           <button onClick={() => onEdit(person)} style={{
             flex: 1, background: "#fff7ed", color: "#c2410c",
             border: "1px solid #fed7aa", borderRadius: 8, padding: "8px 12px",
             fontSize: 13, cursor: "pointer", fontWeight: 600,
           }}>✏️ Modifier</button>
+          <button onClick={() => onToggleTermine(person, !isTermine)} style={{
+            flex: 1, background: isTermine ? "#fff7ed" : "#f3f4f6",
+            color: isTermine ? "#c2410c" : "#6b7280",
+            border: `1px solid ${isTermine ? "#fed7aa" : "#e5e7eb"}`,
+            borderRadius: 8, padding: "8px 12px", fontSize: 13, cursor: "pointer", fontWeight: 600,
+          }}>{isTermine ? "🔄 Je cherche à nouveau" : "🔒 Ne plus chercher"}</button>
           <button onClick={() => onDelete(person.id)} style={{
             background: "transparent", color: "#9ca3af",
             border: "1px solid #e5e7eb", borderRadius: 8, padding: "8px 12px",
@@ -226,8 +240,8 @@ export default function App() {
   };
 
   const stats = {
-    mandataires: mandataires.filter(m => !getConnectionStatus(m.id)).length,
-    mandants: mandants.filter(m => !getConnectionStatus(m.id)).length,
+    mandataires: mandataires.filter(m => !m.termine && !getConnectionStatus(m.id)).length,
+    mandants: mandants.filter(m => !m.termine && !getConnectionStatus(m.id)).length,
     connected: connections.length,
   };
 
@@ -400,6 +414,16 @@ export default function App() {
     } else {
       setEditModal(null);
       showToast("Inscription modifiée !");
+      fetchData();
+    }
+  };
+
+  const handleToggleTermine = async (person, newValue) => {
+    const table = currentUser.type === "mandataire" ? "mandataires" : "mandants";
+    const { error } = await supabase.from(table).update({ termine: newValue }).eq("id", person.id);
+    if (error) showToast("Erreur : " + error.message, "#ef4444");
+    else {
+      showToast(newValue ? "Inscription marquée comme terminée." : "Vous cherchez à nouveau !");
       fetchData();
     }
   };
@@ -727,17 +751,19 @@ export default function App() {
                     <p style={{ fontSize: 13 }}>Soyez le/la premier(e) !</p>
                   </div>
                 );
-                const available = f.filter(p => !getConnectionStatus(p.id));
-                const connected = f.filter(p => !!getConnectionStatus(p.id));
+                const sortByDate = (a, b) => new Date(a.created_at) - new Date(b.created_at);
+                const active = f.filter(p => !p.termine && !getConnectionStatus(p.id)).sort(sortByDate);
+                const done = f.filter(p => p.termine || !!getConnectionStatus(p.id)).sort(sortByDate);
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {[...available, ...connected].map(p => (
+                    {[...active, ...done].map(p => (
                       <PersonCard key={p.id} person={p}
                         type={tab === "mandataires" ? "mandataire" : "mandant"}
                         connectionStatus={getConnectionStatus(p.id)}
                         onRequestConnect={handleRequestConnect}
                         onDelete={(id) => handleDelete(tab === "mandataires" ? "mandataire" : "mandant", id)}
                         onEdit={handleEditOpen}
+                        onToggleTermine={handleToggleTermine}
                         currentUserId={currentUser?.id}
                         hasSession={!!session}
                       />
