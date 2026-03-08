@@ -460,7 +460,7 @@ export default function AdminApp() {
                             <button onClick={() => handleConfirmConnection(c.id)} style={{
                               background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0",
                               borderRadius: 8, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600,
-                            }}>✅ Procuration effectuée</button>
+                            }}>Valider la procuration</button>
                           )}
                           <button onClick={() => handleDeleteConnection(c.id)} style={{
                             background: "#fff", color: "#9ca3af", border: "1px solid #e5e7eb",
