@@ -259,9 +259,15 @@ export default function AdminApp() {
   };
 
   const handleDeleteConnection = async (id) => {
-    await supabase.from("connections").delete().eq("id", id);
-    showToast("Mise en relation supprimée.", "#6b7280");
-    fetchData();
+    const { error } = await supabase.from("connections").delete().eq("id", id);
+    if (error) showToast("Erreur suppression : " + error.message, "#ef4444");
+    else { showToast("Mise en relation supprimée.", "#6b7280"); fetchData(); }
+  };
+
+  const handleConfirmConnection = async (id) => {
+    const { error } = await supabase.from("connections").update({ status: "confirmed" }).eq("id", id);
+    if (error) showToast("Erreur confirmation : " + error.message, "#ef4444");
+    else { showToast("Procuration confirmée !"); fetchData(); }
   };
 
   const handleCreateConnection = async () => {
@@ -451,13 +457,10 @@ export default function AdminApp() {
                         </div>
                         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                           {c.status === "pending" && (
-                            <button onClick={async () => {
-                              await supabase.from("connections").update({ status: "confirmed" }).eq("id", c.id);
-                              showToast("Confirmée !"); fetchData();
-                            }} style={{
+                            <button onClick={() => handleConfirmConnection(c.id)} style={{
                               background: "#dcfce7", color: "#166534", border: "1px solid #bbf7d0",
                               borderRadius: 8, padding: "5px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600,
-                            }}>✅ Confirmer</button>
+                            }}>✅ Procuration effectuée</button>
                           )}
                           <button onClick={() => handleDeleteConnection(c.id)} style={{
                             background: "#fff", color: "#9ca3af", border: "1px solid #e5e7eb",
