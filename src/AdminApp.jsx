@@ -36,7 +36,7 @@ function AdminLogin({ onLogin }) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOtp({
       email: e,
-      options: { shouldCreateUser: false },
+      options: { shouldCreateUser: false, emailRedirectTo: window.location.origin + "/admin" },
     });
     setLoading(false);
     if (error) {
