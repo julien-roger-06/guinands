@@ -6,6 +6,30 @@ const ADMIN_EMAILS = ["julien.roger@me.com", "franckjouve@yahoo.fr"];
 const TOUR_SHORT  = { tour1: "15 mars", tour2: "22 mars", both: "15 & 22 mars" };
 const TOUR_LABELS = { tour1: "1er tour (15 mars)", tour2: "2nd tour (22 mars)", both: "Les deux tours" };
 
+function generateEmailText(mandataire, mandant) {
+  return `Bonjour,
+
+L'équipe du Seignus Renaissance a établi une mise en relation pour les procurations électorales d'Allos (15 et 22 mars 2026).
+
+──────────────────────────────
+MANDATAIRE (présent le jour du vote)
+Nom : ${mandataire.prenom} ${mandataire.nom}
+Email : ${mandataire.email}${mandataire.tel ? `\nTéléphone : ${mandataire.tel}` : ""}
+Disponibilité : ${TOUR_LABELS[mandataire.tours] || mandataire.tours}
+──────────────────────────────
+MANDANT (absent le jour du vote)
+Nom : ${mandant.prenom} ${mandant.nom}
+Email : ${mandant.email}${mandant.tel ? `\nTéléphone : ${mandant.tel}` : ""}
+Besoin : ${TOUR_LABELS[mandant.tours] || mandant.tours}
+──────────────────────────────
+
+Prenez contact entre vous pour organiser la procuration, puis :
+→ Le mandant établit la procuration sur maprocuration.gouv.fr en indiquant l'identité du mandataire.
+
+Cordialement,
+L'équipe du Seignus Renaissance – Allos`;
+}
+
 function Modal({ open, onClose, children }) {
   if (!open) return null;
   return (
@@ -127,6 +151,8 @@ export default function AdminApp() {
   const [newConnMandataire, setNewConnMandataire] = useState("");
   const [newConnMandant, setNewConnMandant]   = useState("");
   const [connSubmitting, setConnSubmitting]   = useState(false);
+  const [emailPreviewModal, setEmailPreviewModal] = useState(null); // { mandataire, mandant }
+  const [copied, setCopied]                   = useState(false);
 
   const showToast = (msg, color = "#ea580c") => {
     setToast({ msg, color });
@@ -247,11 +273,13 @@ export default function AdminApp() {
     setConnSubmitting(false);
     if (error) showToast("Erreur : " + error.message, "#ef4444");
     else {
+      const mand = mandataires.find(p => p.id === newConnMandataire);
+      const mant = mandants.find(p => p.id === newConnMandant);
       setConnectModal(false);
       setNewConnMandataire("");
       setNewConnMandant("");
-      showToast("Mise en relation créée !");
       fetchData();
+      setEmailPreviewModal({ mandataire: mand, mandant: mant });
     }
   };
 
@@ -522,6 +550,73 @@ export default function AdminApp() {
           border: "1px solid #e5e7eb", background: "#fff", color: "#6b7280",
           fontWeight: 600, fontSize: 14, cursor: "pointer",
         }}>Annuler</button>
+      </Modal>
+
+      {/* Modal : prévisualisation email mise en relation */}
+      <Modal open={!!emailPreviewModal} onClose={() => { setEmailPreviewModal(null); setCopied(false); }}>
+        {emailPreviewModal && (() => {
+          const { mandataire, mandant } = emailPreviewModal;
+          const subject = "Mise en relation – Procurations Allos";
+          const body = generateEmailText(mandataire, mandant);
+          const mailto = `mailto:${mandataire.email},${mandant.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+          return (
+            <div>
+              <h3 style={{ margin: "0 0 4px", fontSize: 18, color: "#166534" }}>✅ Mise en relation créée</h3>
+              <p style={{ margin: "0 0 20px", fontSize: 13, color: "#6b7280" }}>Envoyez cet email aux deux parties.</p>
+
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Destinataires</div>
+                <div style={{ background: "#f3f4f6", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#1f2937", fontFamily: "monospace" }}>
+                  {mandataire.email}, {mandant.email}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Objet</div>
+                <div style={{ background: "#f3f4f6", borderRadius: 8, padding: "8px 12px", fontSize: 13, color: "#1f2937" }}>
+                  {subject}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>Corps du message</div>
+                <pre style={{
+                  background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8,
+                  padding: "12px 14px", fontSize: 12, color: "#374151", lineHeight: 1.6,
+                  whiteSpace: "pre-wrap", fontFamily: "monospace", maxHeight: 260, overflowY: "auto", margin: 0,
+                }}>{body}</pre>
+              </div>
+
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button onClick={() => {
+                  navigator.clipboard.writeText(body);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }} style={{
+                  flex: 1, padding: "11px", borderRadius: 10, border: "1px solid #e5e7eb",
+                  background: copied ? "#dcfce7" : "#f9fafb", color: copied ? "#166534" : "#374151",
+                  fontWeight: 600, fontSize: 14, cursor: "pointer",
+                }}>
+                  {copied ? "✅ Copié !" : "📋 Copier le texte"}
+                </button>
+                <a href={mailto} style={{
+                  flex: 1, padding: "11px", borderRadius: 10, border: "none",
+                  background: "linear-gradient(135deg, #ea580c, #c2410c)", color: "#fff",
+                  fontWeight: 700, fontSize: 14, cursor: "pointer", textAlign: "center",
+                  textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  ✉️ Ouvrir dans Mail
+                </a>
+              </div>
+
+              <button onClick={() => { setEmailPreviewModal(null); setCopied(false); }} style={{
+                width: "100%", padding: "11px", borderRadius: 10, border: "1px solid #e5e7eb",
+                background: "#fff", color: "#6b7280", fontWeight: 600, fontSize: 14, cursor: "pointer",
+              }}>Fermer</button>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* Modal : édition */}
