@@ -23,8 +23,17 @@ Email : ${mandant.email}${mandant.tel ? `\nTéléphone : ${mandant.tel}` : ""}
 Besoin : ${TOUR_LABELS[mandant.tours] || mandant.tours}
 ──────────────────────────────
 
-Prenez contact entre vous pour organiser la procuration, puis :
-→ Le mandant établit la procuration sur maprocuration.gouv.fr en indiquant l'identité du mandataire.
+Prenez contact entre vous pour organiser la procuration.
+
+Le mandant aura besoin des informations suivantes concernant le mandataire :
+  • Date de naissance
+  • Numéro national d'électeur (visible sur la carte électorale)
+    OU nom de naissance (nom de jeune fille si femme mariée) et l'ensemble des prénoms dans l'ordre
+  → Le numéro national d'électeur peut aussi être retrouvé sur :
+    https://www.elections.interieur.gouv.fr/mes-demarches/procuration-je-trouve-mon-numero-national-delecteur
+
+Une fois ces informations échangées, le mandant établit la procuration sur :
+→ https://maprocuration.gouv.fr
 
 Cordialement,
 L'équipe du Seignus Renaissance – Allos`;
